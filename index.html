@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Energia Kaland - Az Energiamegmaradás Törvénye</title>
+    <!-- Firebase SDK-k beillesztése -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: #fff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .container {
+            background-color: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        h1 {
+            color: #00ffcc;
+            margin-top: 0;
+        }
+        .game-canvas-container {
+            position: relative;
+            background-color: #111;
+            border: 3px solid #00ffcc;
+            border-radius: 10px;
+            margin: 20px 0;
+            overflow: hidden;
+            height: 300px;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .ui-panel {
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        .inputs-container {
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        .input-group {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px;
+            border-radius: 8px;
+            margin: 5px;
+            min-width: 150px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        input[type="number"] {
+            width: 80px;
+            padding: 5px;
+            border-radius: 5px;
+            border: none;
+            text-align: center;
+            font-size: 16px;
+        }
+        button {
+            background-color: #00ffcc;
+            color: #111;
+            border: none;
+            padding: 12px 25px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 255, 204, 0.4);
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #fff;
+            box-shadow: 0 4px 20px rgba(255, 255, 255, 0.6);
+            transform: scale(1.05);
+        }
+        .feedback {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            min-height: 27px;
+        }
+        .success { color: #00ff66; }
+        .error { color: #ff3333; }
+        .info-box {
+            background-color: rgba(0, 255, 204, 0.1);
+            border-left: 5px solid #00ffcc;
+            padding: 10px;
+            text-align: left;
+            margin-bottom: 20px;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            color: #ffcc00;
+            margin-bottom: 15px;
+        }
+        .leaderboard-container {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            border: 1px solid #ffcc00;
+            display: none;
+        }
+        .leaderboard-title {
+            color: #ffcc00;
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .leaderboard-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            text-align: left;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 16px;
+        }
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🎢 Hullámvasút Energia-Tervező</h1>
+    <p>Segíts a kiskocsinak végigmenni a pályán az energiamegmaradás törvényét használva!</p>
+    
+    <div class="stats">
+        <span id="level-display">Szint: 1 / 5</span>
+        <span id="score-display">Pontszám: 0</span>
+    </div>
+
+    <div class="info-box" id="level-desc">
+        <strong>1. Szint: A Kezdetek.</strong> A teljes mechanikai energia végig <strong>100 J</strong>. A pálya tetején a kocsi áll, így a mozgási energiája 0 J. Számítsd ki a hiányzó értékeket a különböző pontokon! (Összes energia = Helyzeti + Mozgási)
+    </div>
+
+    <div class="game-canvas-container">
+        <canvas id="gameCanvas" width="740" height="300"></canvas>
+    </div>
+
+    <div class="feedback" id="feedback-text"></div>
+
+    <div class="ui-panel">
+        <div class="inputs-container" id="inputs-area">
+            <!-- Dinamikusan generált beviteli mezők jönnek ide -->
+        </div>
+        <button id="action-btn" onclick="checkAnswers()">Indítás! 🚀</button>
+    </div>
+
+    <!-- Ranglista felülete -->
+    <div class="leaderboard-container" id="leaderboard-area">
+        <div class="leaderboard-title">🏆 TOP 5 Ranglista</div>
+        <ol class="leaderboard-list" id="leaderboard-rows">
+            <!-- Ide töltődnek be a Firebase adatok -->
+        </ol>
+    </div>
+</div>
+
+<script>
+    // Firebase inicializálás
+    const firebaseConfig = {
+        apiKey: "AIzaSyC4ypKsFziwbyOQ87Sb-1PrrIZcvLf1_xQ",
+        authDomain: "fizikadomino.firebaseapp.com",
+        databaseURL: "https://fizikadomino-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "fizikadomino",
+        storageBucket: "fizikadomino.firebasestorage.app",
+        messagingSenderId: "272119065201",
+        appId: "1:272119065201:web:c6bdc223fd9a61394f49d0",
+        measurementId: "G-6PNNLQV1GH"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    let currentLevel = 1;
+    let score = 0;
+    let isAnimating = false;
+    let animationProgress = 0;
+    let cartX = 50;
+    let cartY = 50;
+
+    // Szintek adatai
+    const levels = {
+        1: {
+            totalEnergy: 100,
+            desc: "<strong>1. Szint: Egyszerű lejtő.</strong> A teljes energia 100 J. Súrlódás nincs. Töltsd ki a hiányzó energiákat! Ne feledd: Összenergia = Helyzeti + Mozgási.",
+            points: [
+                { name: "A pont (Fent)", x: 100, y: 100, type: 'fixed', eh: 100, em: 0 },
+                { name: "B pont (Középen)", x: 370, y: 170, type: 'input', eh: 50, em: null, label: "Mozgási energia (B)" },
+                { name: "C pont (Lent)", x: 640, y: 250, type: 'input', eh: null, em: 100, label: "Helyzeti energia (C)" }
+            ]
+        },
+        2: {
+            totalEnergy: 120,
+            desc: "<strong>2. Szint: A hurok.</strong> A teljes energia most 120 J. Nincs súrlódás. Figyelj jól a pontok magasságára és az összegekre!",
+            points: [
+                { name: "A pont (Csúcs)", x: 100, y: 100, type: 'fixed', eh: 120, em: 0 },
+                { name: "B pont (Hurok alja)", x: 320, y: 250, type: 'input', eh: 0, em: null, label: "Mozgási energia (B)" },
+                { name: "C pont (Hurok teteje)", x: 450, y: 130, type: 'input', eh: null, em: 40, label: "Helyzeti energia (C)" },
+                { name: "D pont (Kijárat)", x: 640, y: 200, type: 'input', eh: 40, em: null, label: "Mozgási energia (D)" }
+            ]
+        },
+        3: {
+            totalEnergy: 150,
+            desc: "<strong>3. Szint: Valóság és Súrlódás!</strong> A teljes kiinduló energia 150 J. A súrlódás miatt a mozgás során <strong>30 J energia hővé (belső energiává) alakul</strong> a C pontra! Képlet: Összenergia = Helyzeti + Mozgási + Hőenergia.",
+            points: [
+                { name: "A pont", x: 100, y: 100, type: 'fixed', eh: 150, em: 0, etherm: 0 },
+                { name: "B pont (Lejtő alja)", x: 370, y: 250, type: 'input', eh: 0, em: null, etherm: 0, label: "Mozgási energia (B) [Hő még 0J]" },
+                { name: "C pont (Domb tető)", x: 640, y: 150, type: 'input', eh: 60, em: null, etherm: 30, label: "Mozgási energia (C) [Hő már 30J!]" }
+            ]
+        },
+        4: {
+            totalEnergy: 100,
+            desc: "<strong>4. Szint: Fékezés a célegyenesben!</strong> A kiskocsi egy teljesen vízszintes pályára érkezik. Mivel a magasság nem változik, a <strong>Helyzeti energia végig 0 J</strong>. A súrlódás miatt a kiskocsi lassul, mozgási energiája folyamatosan Hővé (E_hő) alakul. A <span style='color: #ff9900; font-size: 1.15em; font-weight: bold;'>Teljes Összenergia végig 100 J</span>! Képlet: Összenergia = Helyzeti + Mozgási + Hőenergia.",
+            points: [
+                { name: "A pont (Fékezés kezdete)", x: 100, y: 200, type: 'input', eh: 0, em: null, etherm: 0, label: "Induló Mozgási energia (A)" },
+                { name: "B pont (Félúton)", x: 370, y: 200, type: 'input', eh: 0, em: 40, etherm: null, label: "Keletkezett Hőenergia (B)" },
+                { name: "C pont (Megállás a célnál)", x: 640, y: 200, type: 'input', eh: 0, em: 0, etherm: null, label: "Végső Hőenergia (C) [A kocsi megállt]" }
+            ]
+        },
+        5: {
+		totalEnergy: 160,
+            desc: "<strong>5. Szint: A Trambulin-effektus (Mesterfok)!</strong> A kiskocsi egy mély gödörbe száguld, ahol egy óriási trambulin (rugó) várja. Súrlódás most nincs, a <strong>Teljes Energia végig 160 J</strong>. Amikor a kocsi eléri a trambulint, a mozgási energiája <strong>Rugalmas energiává (E_r)</strong> alakul, ami teljesen megállítja, majd visszalöki a kocsit! Képlet: Összenergia = Helyzeti + Mozgási + Rugalmas energia.",
+            points: [
+                { name: "A pont (Indulás felülről)", x: 100, y: 80, type: 'fixed', eh: 160, em: 0, elast: 0 },
+                { name: "B pont (A gödör alján)", x: 370, y: 250, type: 'input', eh: 0, em: null, elast: 0, label: "Mozgási energia (B) a trambulin előtt" },
+                { name: "C pont (A trambulinon max. benyomódásnál)", x: 640, y: 250, type: 'input', eh: 0, em: 0, elast: null, label: "Rugalmas energia (C), amikor a kocsi megáll a rugón" }
+            ]
+        }
+    };
+
+    function initLevel() {
+        isAnimating = false;
+        animationProgress = 0;
+        document.getElementById('level-display').innerText = `Szint: ${currentLevel} / 5`;
+        document.getElementById('score-display').innerText = `Pontszám: ${score}`;
+        document.getElementById('leaderboard-area').style.display = 'none';
+        
+        const lvl = levels[currentLevel];
+        document.getElementById('level-desc').innerHTML = lvl.desc;
+        
+        // Bemenetek generálása
+        const inputsArea = document.getElementById('inputs-area');
+        inputsArea.innerHTML = '';
+        
+        lvl.points.forEach((p, idx) => {
+            if (p.type === 'input') {
+                const div = document.createElement('div');
+                div.className = 'input-group';
+                div.innerHTML = `
+                    <label>${p.label}:</label>
+                    <input type="number" id="input-${idx}" min="0" max="200" placeholder="?"> J
+                `;
+                inputsArea.appendChild(div);
+            }
+        });
+        
+        document.getElementById('action-btn').style.display = 'inline-block';
+        document.getElementById('action-btn').innerText = "Indítás! 🚀";
+        document.getElementById('action-btn').onclick = checkAnswers;
+        document.getElementById('feedback-text').innerText = '';
+        
+        drawScene();
+    }
+
+    function drawScene() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const lvl = levels[currentLevel];
+        
+        // Pálya rajzolása
+        ctx.beginPath();
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 6;
+        ctx.moveTo(0, lvl.points[0].y + 20);
+        
+        for (let i = 0; i < lvl.points.length; i++) {
+            ctx.lineTo(lvl.points[i].x, lvl.points[i].y + 20);
+        }
+        ctx.lineTo(canvas.width, lvl.points[lvl.points.length-1].y + 20);
+        ctx.stroke();
+        
+        // Pontok jelölése
+        lvl.points.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y + 20, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = '#ffcc00';
+            ctx.fill();
+            
+            // Feliratok
+            ctx.fillStyle = '#ff9900';
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(p.name, p.x - 30, p.y - 50);
+            
+            // Ismert adatok kiírása a pont mellé
+            ctx.font = '14px Arial';
+            ctx.fillStyle = '#eee';
+            if (p.eh !== null && p.eh !== undefined) ctx.fillText(`Eh = ${p.eh}J`, p.x - 25, p.y - 30);
+            if (p.em !== null && p.em !== undefined) ctx.fillText(`Em = ${p.em}J`, p.x - 25, p.y - 18);
+            if (p.etherm !== null && p.etherm !== undefined) ctx.fillText(`Hő = ${p.etherm}J`, p.x - 25, p.y - 6);
+            if (p.elast !== null && p.elast !== undefined) ctx.fillText(`Er = ${p.elast}J`, p.x - 25, p.y - 6);
+        });
+        
+        // Kocsi rajzolása
+        if (!isAnimating) {
+            cartX = lvl.points[0].x;
+            cartY = lvl.points[0].y;
+        }
+        
+        ctx.beginPath();
+        ctx.fillStyle = '#00ffcc';
+        ctx.fillRect(cartX - 15, cartY - 5, 30, 20);
+        // Kerekek
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(cartX - 10, cartY + 15, 5, 0, 2 * Math.PI);
+        ctx.arc(cartX + 10, cartY + 15, 5, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+
+    function checkAnswers() {
+        const lvl = levels[currentLevel];
+        let allCorrect = true;
+        
+        lvl.points.forEach((p, idx) => {
+            if (p.type === 'input') {
+                const val = parseInt(document.getElementById(`input-${idx}`).value);
+                let expected = 0;
+                
+                // Ellenőrzési logika szintenként
+                if (currentLevel === 1 || currentLevel === 2) {
+                    if (p.eh === null) expected = lvl.totalEnergy - p.em;
+                    if (p.em === null) expected = lvl.totalEnergy - p.eh;
+                } else if (currentLevel === 3) {
+                    if (p.em === null) expected = lvl.totalEnergy - p.eh - p.etherm;
+                } else if (currentLevel === 4) {
+                    if (p.name.includes("A pont")) {
+                        expected = lvl.totalEnergy - p.eh - p.etherm; // 100 - 0 - 0 = 100
+                    } else if (p.name.includes("B pont")) {
+                        expected = lvl.totalEnergy - p.eh - p.em;     // 100 - 0 - 40 = 60
+                    } else if (p.name.includes("C pont")) {
+                        expected = lvl.totalEnergy - p.eh - p.em;     // 100 - 0 - 0 = 100
+                    }
+                } else if (currentLevel === 5) {
+                    if (p.name.includes("B pont")) {
+                        expected = lvl.totalEnergy - p.eh - p.elast;  // 160 - 0 - 0 = 160
+                    } else if (p.name.includes("C pont")) {
+                        expected = lvl.totalEnergy - p.eh - p.em;     // 160 - 0 - 0 = 160
+                    }
+                }
+                
+                if (isNaN(val) || val !== expected) {
+                    allCorrect = false;
+                }
+            }
+        });
+        
+        const feedback = document.getElementById('feedback-text');
+        if (allCorrect) {
+            feedback.className = "feedback success";
+            feedback.innerText = "Tökéletes! Az energia megmaradt! Nézzük a száguldást! 🎢";
+            score += 5; // Minden sikeres pálya +5 pont
+            startAnimation(true);
+        } else {
+            feedback.className = "feedback error";
+            feedback.innerText = "Hoppá, valahol hiba csúszott a számításba! Az energia nem vész el, próbáld újra!";
+            score = Math.max(0, score - 1); // Minden hibás válasz -1 pont
+            document.getElementById('score-display').innerText = `Pontszám: ${score}`;
+            startAnimation(false);
+        }
+    }
+
+    function startAnimation(success) {
+        isAnimating = true;
+        animationProgress = 0;
+        const lvl = levels[currentLevel];
+        
+        function animate() {
+            if (!isAnimating) return;
+            
+            animationProgress += 0.01;
+            
+            if (animationProgress >= 1) {
+                isAnimating = false;
+                if (success) {
+                    if (currentLevel < 5) {
+                        document.getElementById('action-btn').innerText = "Következő szint ➡️";
+                        document.getElementById('action-btn').onclick = () => {
+                            currentLevel++;
+                            initLevel();
+                        };
+                    } else {
+                        document.getElementById('action-btn').style.display = 'none';
+                        setTimeout(handleGameOver, 500);
+                    }
+                } else {
+                    document.getElementById('action-btn').innerText = "Újrapróbálkozás 🔄";
+                    document.getElementById('action-btn').onclick = () => { initLevel(); };
+                }
+                return;
+            }
+            
+            const totalPoints = lvl.points.length;
+            if (success) {
+                const segmentProgress = animationProgress * (totalPoints - 1);
+                const currentSegment = Math.floor(segmentProgress);
+                const localT = segmentProgress - currentSegment;
+                
+                if (currentSegment < totalPoints - 1) {
+                    const p1 = lvl.points[currentSegment];
+                    const p2 = lvl.points[currentSegment + 1];
+                    cartX = p1.x + (p2.x - p1.x) * localT;
+                    cartY = p1.y + (p2.y - p1.y) * localT;
+                }
+            } else {
+                const segmentProgress = animationProgress * (totalPoints - 1) * 0.5;
+                const currentSegment = Math.floor(segmentProgress);
+                const localT = segmentProgress - currentSegment;
+                
+                if (currentSegment < totalPoints - 1) {
+                    const p1 = lvl.points[currentSegment];
+                    const p2 = lvl.points[currentSegment + 1];
+                    cartX = p1.x + (p2.x - p1.x) * localT;
+                    cartY = p1.y + (p2.y - p1.y) * localT;
+                }
+                if (animationProgress > 0.45) {
+                    cartY += Math.sin(animationProgress * 100) * 2;
+                }
+            }
+            
+            drawScene();
+            requestAnimationFrame(animate);
+        }
+        
+        animate();
+    }
+
+function handleGameOver() {
+        let name = prompt(`🎉 Gratulálunk! Sikeresen teljesítetted a játékot!\nVégső pontszámod: ${score} pont.\nKérlek, add meg a neved a ranglistához:`);
+        
+        if (!name || name.trim() === "") {
+            name = "Névtelen játékos";
+        }
+        
+        // Adatok mentése a Firebase-be
+        database.ref('Emegmaradas').push({
+            name: name.trim(),
+            score: score
+        }).then(() => {
+            document.getElementById('feedback-text').innerHTML = `🎉 Játék kész! Pontszámod elmentve, ${name}!`;
+            loadLeaderboard();
+        }).catch((error) => {
+            console.error("Hiba a mentés során: ", error);
+            document.getElementById('feedback-text').innerHTML = `🎉 Játék kész! (A pontszámot nem sikerült menteni).`;
+            loadLeaderboard();
+        });
+    }
+
+    // Top 5 ranglista lekérése és megjelenítése
+    function loadLeaderboard() {
+        database.ref('Emegmaradas')
+            .orderByChild('score')
+            .limitToLast(5)
+            .once('value', (snapshot) => {
+                const listArea = document.getElementById('leaderboard-rows');
+                listArea.innerHTML = '';
+                
+                let records = [];
+                snapshot.forEach((childSnapshot) => {
+                    records.push(childSnapshot.val());
+                });
+                
+                // Mivel a limitToLast növekvő sorrendben adja vissza, megfordítjuk a helyes sorrendhez
+                records.reverse();
+                
+                if(records.length === 0) {
+                    listArea.innerHTML = '<li class="leaderboard-item">Még nincs rögzített eredmény.</li>';
+                } else {
+                    records.forEach((data, index) => {
+                        const li = document.createElement('li');
+                        li.className = 'leaderboard-item';
+                        li.innerHTML = `<span>${index + 1}. ${escapeHtml(data.name)}</span> <strong>${data.score} pont</strong>`;
+                        listArea.appendChild(li);
+                    });
+                }
+                
+                // Újraindítás gomb beállítása a ranglista alatt
+                const actionBtn = document.getElementById('action-btn');
+                actionBtn.style.display = 'inline-block';
+                actionBtn.innerText = "Újra játék 🔄";
+                actionBtn.onclick = () => {
+                    currentLevel = 1;
+                    score = 0;
+                    initLevel();
+                };
+                
+                document.getElementById('leaderboard-area').style.display = 'block';
+            });
+    }
+
+    // HTML escape az XSS támadások ellen a nevek kiírásakor
+    function escapeHtml(str) {
+        return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+    }
+
+    // Első indítás
+    initLevel();
+</script>
+
+</body>
+</html>
